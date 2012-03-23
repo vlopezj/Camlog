@@ -1,38 +1,6 @@
-module type SubstitutionSig = sig
-
-    type ('a,'b) t
-    type ('a,'b) fmap = ('a -> 'b option) -> ('a,'b) t -> ('a,'b) t
-
-    val identity    : ('a,'b) t
-    val find        : ('a,'b) t -> 'a -> 'b option
-    val compose     : ('a,'b) fmap -> ('a,'b) t -> ('a,'b) t -> ('a,'b) t
-    val make        : 'a -> 'b -> ('a,'b) t
-    val add         : ('a,'b) fmap -> ('a,'b) t -> 'a -> 'b -> ('a,'b) t
-end 
-
-
-module Substitution  = struct
-    type ('a,'b) t = ('a * 'b) list
-    type ('a,'b) fmap = ('a -> 'b option) -> ('a,'b) t -> ('a,'b) t
-
-    let identity = []
-    let find b i = try Some (snd (List.find 
-                                (fun (j,_) -> (i = j)) b))
-                   with
-                        Not_found -> None
-
-    let subst ip b = ip (find b)
-    let compose ip b1 b2 = List.append b1 (List.map 
-                                (fun (j,e) -> (j, subst ip b1 e))
-                                b2)
-
-    let make i v = [(i,v)]
-    let add ip b i v = compose ip (make i v) b
-end 
 (* Definiciones *)
 
-
-module Subst = Substitution
+module Subst Substitution
 
 type variable_id = int
 type predicate = { name: string; args: expression list }
