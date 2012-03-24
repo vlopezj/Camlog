@@ -1,6 +1,6 @@
 (* Definiciones *)
 
-module Subst = Substitution
+module Subst = SubstitutionList.SubstitutionList
 
 (* Tipos *)
 type variable_id = int
@@ -36,38 +36,38 @@ let arity p = List.length p.args
 let add_binding = Subst.add interpolate
 let apply_bindings = Subst.apply interpolate
 
-let unify p1 p2 =
+let offset_variable o = function
+        Var i   -> Var (i + o)
+      | e       -> e
+
+module O = OptionMonad.OptionMonad
+module GO = Monad.Generic (O)
+
+let unify ?(off1=0) p1 ?(off2=0) p2 =
     let rec unify' bnd p1 p2 =
         (* Si son variables, las sustituimos por sus valores ya en la lista *)
-        let p1' = bind_if_possible (Subst.find bnd) p1 in
-        let p2' = bind_if_possible (Subst.find bnd) p2 in
+        let p1' = bind_if_possible (Subst.find bnd) (offset_variable off1 p1) in
+        let p2' = bind_if_possible (Subst.find bnd) (offset_variable off2 p2) in
             match p1', p2' with
                 Var i, (Term _ as e)         
-              | (Term _ as e), Var i          -> Some (add_binding bnd i 
+              | (Term _ as e), Var i          -> O.return (add_binding bnd i 
                                                 (apply_bindings bnd e))
               | Var i as u, (Var j as v) -> 
                                           if i < j then
-                                                Some (add_binding bnd j u)
+                                                O.return (add_binding bnd j u)
                                           else if i > j then
-                                                Some (add_binding bnd i v)
+                                                O.return (add_binding bnd i v)
                                           else
-                                                Some bnd
+                                                O.return bnd
               | Term Pred {name=n;args=a1}, 
                 Term Pred {name=m;args=a2} -> if n = m then 
-                                                unify_mult bnd a1 a2
+                                                GO.fold_l2 unify' bnd a1 a2
                                               else
-                                                None
-              | Term Num k, Term Num l  -> if k = l then Some bnd else None
-              | _,_                     -> None
-         and unify_mult bnd a b = match a, b with
-                                [],[] -> Some bnd
-                              | x :: xs, y :: ys -> (match unify' bnd x y with
-                                    Some bnd' -> unify_mult bnd' xs ys
-                                  | None      -> None)
-                              | _    -> None
+                                                O.fail ""
+              | Term k, Term l             -> if k = l then O.return bnd else
+                                                O.fail ""
 in
-    unify' Subst.identity p1 p2
-
+    O.access (unify' Subst.identity p1 p2)
 
 
 (* Examples *)
@@ -78,7 +78,6 @@ let pred n a = Term (upred n a)
 let ulit n = upred n []
 let lit n = pred n []
 let num n = Term (Num n)
-
 
 let rdb_belongs = [{csq = { name = "pertenece"; 
                             args = [Var 1; 
