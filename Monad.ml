@@ -25,8 +25,9 @@ end = struct
     let rec fold_l f i = function
                         []      -> M.return i
                       | x :: xs -> f i x >>= (fun y -> fold_l f y xs)
-    let rec fold_l2 f i l1 l2 = fold_l (fun x (a,b) -> f x a b) i 
+    let rec fold_l2 f i l1 l2 = try fold_l (fun x (a,b) -> f x a b) i 
                                         (List.combine l1 l2)
+                                with Invalid_argument s -> M.fail s
 end
 
 

@@ -1,5 +1,6 @@
 (* Definiciones *)
 
+(* Select a Substitution implementation. May change *)
 module Subst = SubstitutionList.SubstitutionList
 
 (* Tipos *)
@@ -29,9 +30,7 @@ let rec interpolate f expr  = match expr with
 
 
 (* Funciones *)
-
 let arity p = List.length p.args
-
 
 let add_binding = Subst.add interpolate
 let apply_bindings = Subst.apply interpolate
@@ -72,7 +71,7 @@ in
 
 (* Examples *)
 
-(* Algunos atajos *)
+(* Syntactic sugar *)
 let upred n a = (Pred { name=n; args = a})
 let pred n a = Term (upred n a)
 let ulit n = upred n []
