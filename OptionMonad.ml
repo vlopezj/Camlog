@@ -1,7 +1,7 @@
 module rec OptionMonad : sig 
     include Monad.Monad
-    val access  : ('a t) -> 'a option
-    val make    : 'a option -> ('a t)
+    val ad    : ('a t) -> 'a option
+    val ab    : 'a option -> ('a t)
 end = struct
     type 'a t = 'a option
 
@@ -12,8 +12,8 @@ end = struct
     let return a = Some a
     let fail _ = None
 
-    let access x = x
-    let make x = x
+    let ab x = x
+    let ad x = x
 
     include Monad.Generic (OptionMonad)
 end

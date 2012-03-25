@@ -15,20 +15,25 @@ type variable_id = int
 type predicate = { name : string; args : expression list; }
 and term = Pred of predicate | Num of int
 and expression = Term of term | Var of variable_id
+val mkpred : string -> expression list -> predicate
+val arity : predicate -> int
+val max : 'a -> 'a -> 'a
+val variable_span : expression -> variable_id
+val variable_span' : expression list -> variable_id
 type rule = { csq : predicate; cnd : predicate list; }
 type bindings = (variable_id, expression) Subst.t
 type answer = bindings option
-type rule_base = rule list
+type rule_base = { user : rule list; }
 val bind_if_possible :
   (variable_id -> expression option) -> expression -> expression
 val interpolate :
   (variable_id -> expression option) -> expression -> expression
-val arity : predicate -> int
 val add_binding :
   (variable_id, expression) Subst.t ->
   variable_id -> expression -> (variable_id, expression) Subst.t
 val apply_bindings :
   (variable_id, expression) Subst.t -> expression -> expression
+val apply_offset : int -> expression -> expression
 val offset_variable : int -> expression -> expression
 module O :
   sig
@@ -37,8 +42,8 @@ module O :
     val return : 'a -> 'a t
     val fail : string -> 'a t
     val ( >>| ) : 'a t -> 'b t -> 'b t
-    val access : 'a t -> 'a option
-    val make : 'a option -> 'a t
+    val ad : 'a t -> 'a option
+    val ab : 'a option -> 'a t
   end
 module GO :
   sig
@@ -53,6 +58,12 @@ val unify :
   ?off1:int ->
   expression ->
   ?off2:int -> expression -> (variable_id, expression) Subst.t option
+type rule_result = int * bindings * predicate list
+val busca_reglas :
+  rule list ->
+  ?off:int ->
+  expression ->
+  (int * (variable_id, expression) Subst.t * predicate list) LazyList.t
 val upred : string -> expression list -> term
 val pred : string -> expression list -> expression
 val ulit : string -> term

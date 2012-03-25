@@ -5,6 +5,6 @@ module rec OptionMonad :
     val return : 'a -> 'a t
     val fail : string -> 'a t
     val ( >>| ) : 'a t -> 'b t -> 'b t
-    val access : 'a t -> 'a option
-    val make : 'a option -> 'a t
+    val ad : 'a t -> 'a option
+    val ab : 'a option -> 'a t
   end
