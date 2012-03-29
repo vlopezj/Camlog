@@ -2,6 +2,7 @@ open Substitution
 
 (* Módulo de sustitución *)
 module rec SubstitutionList : SubstitutionSig with
+    (* FIXME: Only for debuggin purposes *)
     type ('a,'b) t = ('a * 'b) list 
 = struct
     type ('a,'b) t = ('a * 'b) list
