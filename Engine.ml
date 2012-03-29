@@ -111,21 +111,22 @@ let busca_reglas db var_count ?(bnd=Subst.identity) ?(off=0) pred =
               | None        ->    None)) it_reglas
 
 
-let rec prove db var_count ?(bnd=Subst.identity) ?(off=0) pred =
-    let span_pred = off + (variable_span pred) in
-    let reglas = busca_reglas db var_count ~bnd:bnd ~off:off pred in
+let rec prove db ?(var_count=0) ?(bnd=Subst.identity) ?(off=0) pred =
+    let pred_span = off + (variable_span pred) in
+    let var_count' = max var_count pred_span in
+    let reglas = busca_reglas db var_count' ~bnd:bnd ~off:off pred in
     reglas >>= (fun (Partial (off, bnd, cnd)) -> 
-        let rule_span = variable_span_all (List.map (fun x -> Term x) cnd) in
+        let rule_span = off + variable_span_all (List.map (fun x -> Term x) cnd) in
         LazyList.map
             (fun (Counted (vc,bnd))-> 
-                    Counted (vc, Subst.filter (fun i -> (i <= span_pred)) bnd))
-        (prove_all db (off + rule_span) ~bnd:bnd ~ploff:off cnd))                             
+                    Counted (vc, Subst.filter (fun i -> (i <= pred_span)) bnd))
+        (prove_all db ~var_count:(max var_count rule_span) ~bnd:bnd ~ploff:off cnd))                             
 
-and prove_all db var_count ?(bnd=Subst.identity) ?(ploff=0) predl = 
+and prove_all db ?(var_count=0) ?(bnd=Subst.identity) ?(ploff=0) predl = 
     let rec prove_all' bnd var_count = function
             []  ->  LazyList.single (Counted (var_count, bnd))
-          | x :: xs -> (prove db var_count ~bnd:bnd ~off:ploff (Term x)) >>= (fun 
-                            (Counted (var_count, b)) -> prove_all' b var_count xs)
+          | x :: xs -> (prove db ~var_count:var_count ~bnd:bnd ~off:ploff (Term x)) 
+                        >>= (fun (Counted (var_count, b)) -> prove_all' b var_count xs)
     in
         prove_all' bnd var_count predl
 

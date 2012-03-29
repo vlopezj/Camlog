@@ -70,12 +70,12 @@ val busca_reglas :
   ?off:int -> expression -> partial_proof LazyList.t
 val prove :
   rule list ->
-  int ->
+  ?var_count:int ->
   ?bnd:(variable_id, expression) Subst.t ->
   ?off:int -> expression -> var_count_proof LazyList.t
 val prove_all :
   rule list ->
-  int ->
+  ?var_count:int ->
   ?bnd:bindings -> ?ploff:int -> predicate list -> var_count_proof LazyList.t
 val upred : string -> expression list -> predicate
 val pred : string -> expression list -> expression
