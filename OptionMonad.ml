@@ -1,8 +1,5 @@
-module rec OptionMonad : sig 
-    include Monad.Monad
-    val ad    : ('a t) -> 'a option
-    val ab    : 'a option -> ('a t)
-end = struct
+module rec OptionMonad : Monad.Monad with type 'a t = 'a option
+= struct
     type 'a t = 'a option
 
     let (>>=) ma f = match ma with
@@ -11,9 +8,6 @@ end = struct
     
     let return a = Some a
     let fail _ = None
-
-    let ab x = x
-    let ad x = x
 
     include Monad.Generic (OptionMonad)
 end

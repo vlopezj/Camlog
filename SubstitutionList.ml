@@ -5,7 +5,9 @@ module rec SubstitutionList : sig
     include SubstitutionSig 
     val ad : ('a * 'b) list -> ('a,'b) SubstitutionList.t
     val ab : ('a,'b) SubstitutionList.t -> ('a * 'b) list
-end  = struct
+end with
+    type ('a,'b) t = ('a * 'b) list 
+= struct
     type ('a,'b) t = ('a * 'b) list
     type ('a,'b) fmap = ('a -> 'b option) -> 'b -> 'b
 

@@ -79,23 +79,23 @@ let unify ?(bnd=Subst.identity) ?(off1=0) p1 ?(off2=0) p2 =
         let p2' = bind_if_possible (Subst.find bnd) (offset_variable off2 p2) in
             match p1', p2', off1, off2 with
                 Var i, (Term _ as e), _, off
-              | (Term _ as e), Var i, off, _  -> O.return (add_binding bnd i 
+              | (Term _ as e), Var i, off, _  -> Some (add_binding bnd i 
                                                  (apply_bindings bnd
                                                  (apply_offset off e)))
               | Var i as u, (Var j as v), _, _ -> 
                                           if i < j then
-                                                O.return (add_binding bnd j u)
+                                                Some (add_binding bnd j u)
                                           else if i > j then
-                                                O.return (add_binding bnd i v)
+                                                Some (add_binding bnd i v)
                                           else
-                                                O.return bnd
+                                                Some bnd
               | Term {name=n;args=a1}, 
                 Term {name=m;args=a2}, _, _ -> if n = m then 
                                                 GO.fold_l2 unify' bnd a1 a2
                                               else
-                                                O.fail ""
+                                                None
 in
-    O.ad (unify' bnd p1 p2)
+    unify' bnd p1 p2
 
 type partial_proof = Partial of (int * bindings * predicate list)
 type var_count_proof = Counted of (int * bindings)

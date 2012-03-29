@@ -1,6 +1,6 @@
 module Subst :
   sig
-    type ('a, 'b) t = ('a, 'b) SubstitutionList.SubstitutionList.t
+    type ('a, 'b) t = ('a * 'b) list
     type ('a, 'b) fmap = ('a -> 'b option) -> 'b -> 'b
     val identity : ('a, 'b) t
     val compose : ('a, 'b) fmap -> ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
@@ -38,13 +38,11 @@ val apply_offset : int -> expression -> expression
 val offset_variable : int -> expression -> expression
 module O :
   sig
-    type 'a t = 'a OptionMonad.OptionMonad.t
+    type 'a t = 'a option
     val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
     val return : 'a -> 'a t
     val fail : string -> 'a t
     val ( >>| ) : 'a t -> 'b t -> 'b t
-    val ad : 'a t -> 'a option
-    val ab : 'a option -> 'a t
   end
 module GO :
   sig
@@ -59,7 +57,7 @@ val unify :
   ?bnd:(variable_id, expression) Subst.t ->
   ?off1:int ->
   expression ->
-  ?off2:int -> expression -> (variable_id, expression) Subst.t option
+  ?off2:int -> expression -> (variable_id, expression) Subst.t O.t
 type partial_proof = Partial of (int * bindings * predicate list)
 type var_count_proof = Counted of (int * bindings)
 val ( >>= ) : 'a LazyList.t -> ('a -> 'b LazyList.t) -> 'b LazyList.t
