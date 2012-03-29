@@ -1,22 +1,11 @@
-module type SubstitutionSig = sig
-    type ('a,'b) t
-    type ('a,'b) fmap = ('a -> 'b option) -> 'b -> 'b
-
-    val identity    : ('a,'b) t
-    val compose     : ('a,'b) fmap -> ('a,'b) t -> ('a,'b) t -> ('a,'b) t
-
-    val apply       : ('a,'b) fmap -> ('a,'b) t -> 'b -> 'b
-    val find        : ('a,'b) t -> 'a -> 'b option
-    val make        : 'a -> 'b -> ('a,'b) t
-    val add         : ('a,'b) fmap -> ('a,'b) t -> 'a -> 'b -> ('a,'b) t
-end
+open Substitution
 
 (* Módulo de sustitución *)
 module rec SubstitutionList : sig 
-    include SubstitutionSig
+    include SubstitutionSig 
     val ad : ('a * 'b) list -> ('a,'b) SubstitutionList.t
     val ab : ('a,'b) SubstitutionList.t -> ('a * 'b) list
-end = struct
+end  = struct
     type ('a,'b) t = ('a * 'b) list
     type ('a,'b) fmap = ('a -> 'b option) -> 'b -> 'b
 
@@ -35,6 +24,8 @@ end = struct
 
     let make i v = [(i,v)]
     let add ip b i v = compose ip (make i v) b
+
+    let filter f b = List.filter (fun (i,_) -> f i) b
 
     let ad x = x
     let ab x = x
