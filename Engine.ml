@@ -76,7 +76,9 @@ module GO = Monad.Generic (O)
 type lazy_pred = LazyPred of (int * predicate)
 type lazy_pred_list = LazyPredList of (int * predicate list)
 
-let pred_to_lazy p = LazyPred (0, p);;
+let lazy_of_pred p = LazyPred (0, p);;
+let expr_of_lazy (LazyPred (off, p)) = apply_offset off (Term p)
+
 let lazy_pred_span (LazyPred (off, p)) = off + (variable_span (Term p))
 let lazy_pred_list_span (LazyPredList (off, pl)) = List.fold_left (fun acc p ->
         max acc (lazy_pred_span (LazyPred (off, p)))) 0 pl
@@ -85,30 +87,28 @@ let list_of_lazy_pred_list (LazyPredList(off, pl)) = List.map (fun p ->
     LazyPred(off, p)) pl
 
 (* Unification ~ the core of the engine *)
-let unify ?(bnd=Subst.identity) (LazyPred(off1,p1)) (LazyPred(off2,p2)) =
-    let rec unify' bnd p1 p2 =
+let unify ?(bnd=Subst.identity) lp1 lp2 =
+    let rec unify' bnd e1 e2 =
         (* Si son variables, las sustituimos por sus valores ya en la lista *)
-        let p1' = bind_if_possible (Subst.find bnd) (offset_variable off1 p1) in
-        let p2' = bind_if_possible (Subst.find bnd) (offset_variable off2 p2) in
-            match p1', p2', off1, off2 with
-                Var i, (Term _ as e), _, off
-              | (Term _ as e), Var i, off, _  -> Some (add_binding bnd i 
-                                                 (apply_bindings bnd
-                                                 (apply_offset off e)))
-              | Var i as u, (Var j as v), _, _ -> 
-                                          if i < j then
-                                                Some (add_binding bnd j u)
-                                          else if i > j then
-                                                Some (add_binding bnd i v)
-                                          else
-                                                Some bnd
+        let e1' = bind_if_possible (Subst.find bnd) e1 in
+        let e2' = bind_if_possible (Subst.find bnd) e2 in
+            match e1', e2' with
+                Var i, (Term _ as e)
+              | (Term _ as e), Var i        -> Some (add_binding bnd i
+                                            (apply_bindings bnd e))
+              | Var i as u, (Var j as v)    ->  if i < j then
+                                                    Some (add_binding bnd j u)
+                                                else if i > j then
+                                                    Some (add_binding bnd i v)
+                                                else
+                                                    Some bnd
               | Term {name=n;args=a1}, 
-                Term {name=m;args=a2}, _, _ -> if n = m then 
+                Term {name=m;args=a2}    -> if n = m then 
                                                 GO.fold_l2 unify' bnd a1 a2
                                               else
                                                 None
 in
-    unify' bnd (Term p1) (Term p2)
+    unify' bnd (expr_of_lazy lp1) (expr_of_lazy lp2)
 
 (* Proof tree generation *)
 type var_count_proof = Counted of (int * bindings)
@@ -131,8 +131,8 @@ let busca_reglas db var_count ?(bnd=Subst.identity) lp =
               | None        ->    None)) 
         it_reglas
 
-let clean_bindings span bnd = bnd
-    (* Subst.filter (fun i -> (i <= pred_span)) bnd *)
+let clean_bindings span bnd = Subst.filter (fun i -> (i <= span)) bnd
+
 let clean_counted span (Counted (vc, bnd)) = (Counted (vc, clean_bindings span
 bnd))
 

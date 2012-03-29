@@ -53,7 +53,8 @@ module GO :
   end
 type lazy_pred = LazyPred of (int * predicate)
 type lazy_pred_list = LazyPredList of (int * predicate list)
-val pred_to_lazy : predicate -> lazy_pred
+val lazy_of_pred : predicate -> lazy_pred
+val expr_of_lazy : lazy_pred -> expression
 val lazy_pred_span : lazy_pred -> int
 val lazy_pred_list_span : lazy_pred_list -> int
 val list_of_lazy_pred_list : lazy_pred_list -> lazy_pred list
@@ -68,8 +69,8 @@ val busca_reglas :
   int ->
   ?bnd:(variable_id, expression) Subst.t ->
   lazy_pred -> partial_proof LazyList.t
-val clean_bindings : 'a -> 'b -> 'b
-val clean_counted : 'a -> var_count_proof -> var_count_proof
+val clean_bindings : 'a -> ('a, 'b) Subst.t -> ('a, 'b) Subst.t
+val clean_counted : variable_id -> var_count_proof -> var_count_proof
 val prove :
   rule list -> ?cb:var_count_proof -> lazy_pred -> var_count_proof LazyList.t
 val prove_all :
