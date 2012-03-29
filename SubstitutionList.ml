@@ -1,11 +1,7 @@
 open Substitution
 
 (* Módulo de sustitución *)
-module rec SubstitutionList : sig 
-    include SubstitutionSig 
-    val ad : ('a * 'b) list -> ('a,'b) SubstitutionList.t
-    val ab : ('a,'b) SubstitutionList.t -> ('a * 'b) list
-end with
+module rec SubstitutionList : SubstitutionSig with
     type ('a,'b) t = ('a * 'b) list 
 = struct
     type ('a,'b) t = ('a * 'b) list
@@ -28,8 +24,5 @@ end with
     let add ip b i v = compose ip (make i v) b
 
     let filter f b = List.filter (fun (i,_) -> f i) b
-
-    let ad x = x
-    let ab x = x
 end
 

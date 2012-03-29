@@ -9,8 +9,6 @@ module Subst :
     val make : 'a -> 'b -> ('a, 'b) t
     val add : ('a, 'b) fmap -> ('a, 'b) t -> 'a -> 'b -> ('a, 'b) t
     val filter : ('a -> bool) -> ('a, 'b) t -> ('a, 'b) t
-    val ad : ('a * 'b) list -> ('a, 'b) t
-    val ab : ('a, 'b) t -> ('a * 'b) list
   end
 type variable_id = int
 type pred_name = Str of string | Num of int | Cons | Empty
@@ -53,28 +51,30 @@ module GO :
     val fold_l2 :
       ('a -> 'b -> 'c -> 'a O.t) -> 'a -> 'b list -> 'c list -> 'a O.t
   end
+type lazy_pred = LazyPred of (int * predicate)
+type lazy_pred_list = LazyPredList of (int * predicate list)
+val pred_to_lazy : predicate -> lazy_pred
+val lazy_pred_span : lazy_pred -> int
+val lazy_pred_list_span : lazy_pred_list -> int
+val list_of_lazy_pred_list : lazy_pred_list -> lazy_pred list
 val unify :
   ?bnd:(variable_id, expression) Subst.t ->
-  ?off1:int ->
-  expression ->
-  ?off2:int -> expression -> (variable_id, expression) Subst.t O.t
-type partial_proof = Partial of (int * bindings * predicate list)
+  lazy_pred -> lazy_pred -> (variable_id, expression) Subst.t O.t
 type var_count_proof = Counted of (int * bindings)
+type partial_proof = Partial of (var_count_proof * lazy_pred_list)
 val ( >>= ) : 'a LazyList.t -> ('a -> 'b LazyList.t) -> 'b LazyList.t
 val busca_reglas :
   rule list ->
   int ->
   ?bnd:(variable_id, expression) Subst.t ->
-  ?off:int -> expression -> partial_proof LazyList.t
+  lazy_pred -> partial_proof LazyList.t
+val clean_bindings : 'a -> 'b -> 'b
+val clean_counted : 'a -> var_count_proof -> var_count_proof
 val prove :
-  rule list ->
-  ?var_count:int ->
-  ?bnd:(variable_id, expression) Subst.t ->
-  ?off:int -> expression -> var_count_proof LazyList.t
+  rule list -> ?cb:var_count_proof -> lazy_pred -> var_count_proof LazyList.t
 val prove_all :
   rule list ->
-  ?var_count:int ->
-  ?bnd:bindings -> ?ploff:int -> predicate list -> var_count_proof LazyList.t
+  ?cb:var_count_proof -> lazy_pred_list -> var_count_proof LazyList.t
 val upred : string -> expression list -> predicate
 val pred : string -> expression list -> expression
 val ulit : string -> predicate

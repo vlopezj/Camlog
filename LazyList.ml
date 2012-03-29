@@ -34,7 +34,11 @@ let rec option_map f it = it >>= (fun x -> match (f x) with
                                     Some x -> (single x)
                                   | None -> empty)
 
-
+let rec take n it = if n <= 0 then
+                        []
+                      else match it with
+                          Cons (x, lit) -> x :: (take (n-1) (Lazy.force lit))
+                        | Empty         -> []
 
 
 

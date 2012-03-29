@@ -16,4 +16,5 @@ val (>>=)    : 'a t -> ('a -> 'b t) -> 'b t
 
 val concat  : ('a t) t -> 'a t
 val append  : ('a t) -> ('a t) -> ('a t)
+val take    : int -> 'a t -> 'a list
 

@@ -72,7 +72,20 @@ let offset_variable o = function
 module O = OptionMonad.OptionMonad
 module GO = Monad.Generic (O)
 
-let unify ?(bnd=Subst.identity) ?(off1=0) p1 ?(off2=0) p2 =
+(* Deferred predicate renaming *)
+type lazy_pred = LazyPred of (int * predicate)
+type lazy_pred_list = LazyPredList of (int * predicate list)
+
+let pred_to_lazy p = LazyPred (0, p);;
+let lazy_pred_span (LazyPred (off, p)) = off + (variable_span (Term p))
+let lazy_pred_list_span (LazyPredList (off, pl)) = List.fold_left (fun acc p ->
+        max acc (lazy_pred_span (LazyPred (off, p)))) 0 pl
+
+let list_of_lazy_pred_list (LazyPredList(off, pl)) = List.map (fun p ->
+    LazyPred(off, p)) pl
+
+(* Unification ~ the core of the engine *)
+let unify ?(bnd=Subst.identity) (LazyPred(off1,p1)) (LazyPred(off2,p2)) =
     let rec unify' bnd p1 p2 =
         (* Si son variables, las sustituimos por sus valores ya en la lista *)
         let p1' = bind_if_possible (Subst.find bnd) (offset_variable off1 p1) in
@@ -95,40 +108,51 @@ let unify ?(bnd=Subst.identity) ?(off1=0) p1 ?(off2=0) p2 =
                                               else
                                                 None
 in
-    unify' bnd p1 p2
+    unify' bnd (Term p1) (Term p2)
 
-type partial_proof = Partial of (int * bindings * predicate list)
+(* Proof tree generation *)
 type var_count_proof = Counted of (int * bindings)
+type partial_proof = Partial of (var_count_proof * lazy_pred_list)
 
 let (>>=) = LazyList.(>>=)
 
-let busca_reglas db var_count ?(bnd=Subst.identity) ?(off=0) pred =
+let busca_reglas db var_count ?(bnd=Subst.identity) lp =
     let it_reglas = LazyList.from_list db in
     LazyList.option_map (fun
         { csq=csq; cnd=cnd } ->
-            (match unify ~bnd:bnd ~off1:off pred ~off2:var_count (Term csq) with
-                Some bnd    ->    Some (Partial (var_count, bnd, cnd))
-              | None        ->    None)) it_reglas
+            (* Rename variables *)
+            let lcsq = LazyPred (var_count, csq) in
+            let lcnd = LazyPredList (var_count, cnd) in
+            (match unify ~bnd:bnd lp lcsq with
+                Some bnd    ->    Some (Partial ((Counted (max (lazy_pred_span lcsq)
+                                                        (lazy_pred_list_span
+                                                        lcnd),
+                                        bnd)), lcnd))
+              | None        ->    None)) 
+        it_reglas
 
+let clean_bindings span bnd = bnd
+    (* Subst.filter (fun i -> (i <= pred_span)) bnd *)
+let clean_counted span (Counted (vc, bnd)) = (Counted (vc, clean_bindings span
+bnd))
 
-let rec prove db ?(var_count=0) ?(bnd=Subst.identity) ?(off=0) pred =
-    let pred_span = off + (variable_span pred) in
-    let var_count' = max var_count pred_span in
-    let reglas = busca_reglas db var_count' ~bnd:bnd ~off:off pred in
-    reglas >>= (fun (Partial (off, bnd, cnd)) -> 
-        let rule_span = off + variable_span_all (List.map (fun x -> Term x) cnd) in
-        LazyList.map
-            (fun (Counted (vc,bnd))-> 
-                    Counted (vc, Subst.filter (fun i -> (i <= pred_span)) bnd))
-        (prove_all db ~var_count:(max var_count rule_span) ~bnd:bnd ~ploff:off cnd))                             
+let rec prove db ?(cb=Counted (0, Subst.identity)) lp =
+    let pred_span = lazy_pred_span lp in
+    let Counted(var_count, bnd) = cb in
+    let var_count = max var_count pred_span in
+        let reglas = busca_reglas db var_count ~bnd:bnd lp in
+        reglas >>= (fun (Partial (cb, lpl)) -> 
+            LazyList.map (clean_counted pred_span)
+                (prove_all db ~cb:cb lpl))                             
 
-and prove_all db ?(var_count=0) ?(bnd=Subst.identity) ?(ploff=0) predl = 
-    let rec prove_all' bnd var_count = function
-            []  ->  LazyList.single (Counted (var_count, bnd))
-          | x :: xs -> (prove db ~var_count:var_count ~bnd:bnd ~off:ploff (Term x)) 
-                        >>= (fun (Counted (var_count, b)) -> prove_all' b var_count xs)
+and prove_all db ?(cb=Counted (0, Subst.identity)) lpl = 
+    let rec prove_all' cb = function
+            []  ->  LazyList.single cb
+          | lp :: lps -> (prove db ~cb:cb lp) 
+                        >>= (fun cb -> prove_all' cb lps)
     in
-        prove_all' bnd var_count predl
+        prove_all' cb (list_of_lazy_pred_list lpl)
+
 
 (* Todo: limpiar *)
 
