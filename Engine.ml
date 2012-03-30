@@ -26,6 +26,17 @@ type 'a gen_predicate = { name: pred_name; args: 'a gen_expression list }
 type predicate = variable_id gen_predicate
 type expression = variable_id gen_expression
 
+(* Some help for the annoying predicate - expression duality
+ * Gets a function to work with predicates from a function
+ * designed for expressions only *)
+let pred_wrapper f p = match f (Term p) with
+    Term p' -> p'
+  | _       -> assert false
+
+let pred_wrapper2 f p = match f (Term p) with
+    (Term p',x) -> (p',x)
+  | _           -> assert false
+
 (* Expression manipulation functions *)
 let mkpred name args = {name = name; args = args}
 let arity p = List.length p.args
@@ -68,8 +79,8 @@ and variable_span_all l = List.fold_left (fun acc e -> max acc (variable_span
 
 
 (* Rules *)
-type rule = { csq: predicate; cnd: predicate list }
-type rule_base = {user: rule list}
+type 'a rule = { csq: 'a gen_predicate; cnd: 'a gen_predicate list }
+type rule_base = {user: variable_id rule list}
 
 (* Binding management *)
 let bind_if_possible f expr = match expr with
@@ -232,23 +243,17 @@ let expression_from_user ?(tbls=(ref IntMap.empty, ref
                                          v) ue in
         (new_expr, !table)
 
-let pred_wrapper f p = match f (Term p) with
-    Term p' -> p'
-  | _       -> assert false
-
-let pred_wrapper2 f p = match f (Term p) with
-    (Term p',x) -> (p',x)
-  | _           -> assert false
-
 
 let predicate_from_user ?(tbls=(ref IntMap.empty, ref StringMap.empty))
     = pred_wrapper2 (expression_from_user ~tbls:tbls)
 
 (* TODO:
-    Finish improving data input and output mechanisms
+    Pretty-printing
+    Pretty-inputing (aka. parsing)
     Make test bank
     Cuts
-    Evaluation
+    Expression evaluation (is)
+    Standard library
    *)
 
 (* Examples *)

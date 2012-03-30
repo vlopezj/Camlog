@@ -10,6 +10,12 @@ type 'a gen_predicate = { name : pred_name; args : 'a gen_expression list; }
 and 'a gen_expression = Term of 'a gen_predicate | Var of 'a
 type predicate = variable_id gen_predicate
 type expression = variable_id gen_expression
+val pred_wrapper :
+  ('a gen_expression -> 'b gen_expression) ->
+  'a gen_predicate -> 'b gen_predicate
+val pred_wrapper2 :
+  ('a gen_expression -> 'b gen_expression * 'c) ->
+  'a gen_predicate -> 'b gen_predicate * 'c
 val mkpred : pred_name -> 'a gen_expression list -> 'a gen_predicate
 val arity : 'a gen_predicate -> int
 module ExpressionInterpolable :
@@ -40,8 +46,8 @@ module EI :
 type bindings = SubstId.t
 val variable_span : int gen_expression -> int
 val variable_span_all : int gen_expression list -> int
-type rule = { csq : predicate; cnd : predicate list; }
-type rule_base = { user : rule list; }
+type 'a rule = { csq : 'a gen_predicate; cnd : 'a gen_predicate list; }
+type rule_base = { user : variable_id rule list; }
 val bind_if_possible :
   ('a -> 'a gen_expression option) -> 'a gen_expression -> 'a gen_expression
 val add_binding : SubstId.t -> SubstId.key -> SubstId.value -> SubstId.t
@@ -76,13 +82,15 @@ type var_count_proof = Counted of (int * bindings)
 type partial_proof = Partial of (var_count_proof * lazy_pred_list)
 val ( >>= ) : 'a LazyList.t -> ('a -> 'b LazyList.t) -> 'b LazyList.t
 val busca_reglas :
-  rule list -> int -> ?bnd:SubstId.t -> lazy_pred -> partial_proof LazyList.t
+  variable_id rule list ->
+  int -> ?bnd:SubstId.t -> lazy_pred -> partial_proof LazyList.t
 val clean_bindings : SubstId.key -> SubstId.t -> SubstId.t
 val clean_counted : SubstId.key -> var_count_proof -> var_count_proof
 val prove :
-  rule list -> ?cb:var_count_proof -> lazy_pred -> var_count_proof LazyList.t
+  variable_id rule list ->
+  ?cb:var_count_proof -> lazy_pred -> var_count_proof LazyList.t
 val prove_all :
-  rule list ->
+  variable_id rule list ->
   ?cb:var_count_proof -> lazy_pred_list -> var_count_proof LazyList.t
 type u_variable_id = Anonymous | VarName of string
 type user_predicate = u_variable_id gen_predicate
@@ -150,12 +158,6 @@ module StringMap :
 val expression_from_user :
   ?tbls:u_variable_id IntMap.t ref * IntMap.key EI.t StringMap.t ref ->
   u_variable_id EI.t -> IntMap.key EI.t * u_variable_id IntMap.t
-val pred_wrapper :
-  ('a gen_expression -> 'b gen_expression) ->
-  'a gen_predicate -> 'b gen_predicate
-val pred_wrapper2 :
-  ('a gen_expression -> 'b gen_expression * 'c) ->
-  'a gen_predicate -> 'b gen_predicate * 'c
 val predicate_from_user :
   ?tbls:u_variable_id IntMap.t ref * IntMap.key EI.t StringMap.t ref ->
   u_variable_id gen_predicate ->
@@ -167,9 +169,9 @@ val lit : string -> 'a gen_expression
 val num : int -> 'a gen_expression
 val pcons : 'a gen_expression -> 'a gen_expression -> 'a gen_expression
 val plist : 'a gen_expression list -> 'a gen_expression
-val ( <<- ) : predicate -> predicate list -> rule
+val ( <<- ) : 'a gen_predicate -> 'a gen_predicate list -> 'a rule
 val ( |- ) : 'a gen_expression -> 'a gen_expression -> 'a gen_expression
-val rdb_belongs : rule list
-val rdb_path : rule list
+val rdb_belongs : int rule list
+val rdb_path : int rule list
 val pred_horizontal : int gen_expression
 val pred_vertical : int gen_expression
