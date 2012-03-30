@@ -1,12 +1,28 @@
-module type SubstitutionSig =
-  sig
-    type ('a, 'b) t
-    type ('a, 'b) fmap = ('a -> 'b option) -> 'b -> 'b
-    val identity : ('a, 'b) t
-    val compose : ('a, 'b) fmap -> ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
-    val apply : ('a, 'b) fmap -> ('a, 'b) t -> 'b -> 'b
-    val find : ('a, 'b) t -> 'a -> 'b option
-    val make : 'a -> 'b -> ('a, 'b) t
-    val add : ('a, 'b) fmap -> ('a, 'b) t -> 'a -> 'b -> ('a, 'b) t
-    val filter : ('a -> bool) -> ('a, 'b) t -> ('a, 'b) t
-  end
+(* Generic interface for composable substitutions *)
+module type OrderedType = Map.OrderedType
+
+module type Interpolable = sig
+    type 'a t
+
+    val sure_interpolate : ('a -> 'b t) -> 'a t -> 'b t
+    val interpolate :   ('a -> 'a t option) -> 'a t -> 'a t
+end
+
+module type SubstitutionSig = sig
+    type key
+    type value
+
+    type t
+
+    val identity : t 
+    val singleton : key -> value -> t
+
+    val compose : t -> t -> t
+
+    val apply : t -> value -> value
+    val find : t -> key -> value option
+    val add : t -> key -> value -> t
+    val filter : (key -> bool) -> t -> t
+end
+
+

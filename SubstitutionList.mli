@@ -1,6 +1,7 @@
-open Substitution
-
-module SubstitutionList : SubstitutionSig with
+module Make (K : Substitution.OrderedType) (V : Substitution.Interpolable) :
+    Substitution.SubstitutionSig 
+    with type key = K.t
+    with type value = K.t V.t
     (* FIXME: Only for debugging purposes *)
-    type ('a, 'b) t = ('a * 'b) list
+    with type t = (K.t * (K.t V.t)) list
 

@@ -4,7 +4,8 @@
 
 (* Select a Substitution implementation. Should change to somenthing
  * more efficient (Tree, or even an impure HashMap) *)
-module Subst = SubstitutionList.SubstitutionList
+
+
 
 (* Tipos *)
 type variable_id = int
@@ -20,16 +21,42 @@ type 'a gen_predicate = { name: pred_name; args: 'a gen_expression list }
             Term of 'a gen_predicate
           | Var of 'a
 
-type 'a gen_bindings = ('a, 'a gen_expression) Subst.t
 
 (* Inside the engine, variables are encoded as integers *)
 type predicate = variable_id gen_predicate
 type expression = variable_id gen_expression
-type bindings = variable_id gen_bindings
 
 (* Expression manipulation functions *)
 let mkpred name args = {name = name; args = args}
 let arity p = List.length p.args
+
+
+(* Bindings *)
+
+module ExpressionInterpolable : Substitution.Interpolable with
+    type 'a t = 'a gen_expression
+= struct
+    type 'a t = 'a gen_expression
+
+    let rec sure_interpolate f = function
+        Term {name=n; args=a} -> 
+            Term (mkpred n (List.map (sure_interpolate f) a))
+      | Var i  -> f i
+
+    let interpolate f = sure_interpolate (fun i -> 
+            match f i with
+                Some v -> v
+              | None  -> Var i)
+end
+
+module SubstId = SubstitutionList.Make(struct 
+        type t = variable_id
+        let compare = compare
+    end)(ExpressionInterpolable)
+
+module EI = ExpressionInterpolable
+
+type bindings = SubstId.t
 
 
 let rec variable_span = function
@@ -44,27 +71,17 @@ and variable_span_all l = List.fold_left (fun acc e -> max acc (variable_span
 type rule = { csq: predicate; cnd: predicate list }
 type rule_base = {user: rule list}
 
-(* Manejo de bindings *)
+(* Binding management *)
 let bind_if_possible f expr = match expr with
                              Var i -> (match f i with
                                                 Some e -> e
                                               | None   -> expr)
                             | _    -> expr 
 
-let rec sure_interpolate f = function
-        Term {name=n; args=a} -> 
-            Term (mkpred n (List.map (sure_interpolate f) a))
-          | Var i  -> f i
+let add_binding = SubstId.add
+let apply_bindings = SubstId.apply
 
-
-let interpolate f = sure_interpolate (fun i -> match f i with
-                                                     Some v -> v
-                                                   | None  -> Var i)
-
-let add_binding = Subst.add interpolate
-let apply_bindings = Subst.apply interpolate
-
-let apply_offset off expr = interpolate (fun i -> Some (Var (i + off))) expr
+let apply_offset off expr = EI.interpolate (fun i -> Some (Var (i + off))) expr
 
 
 (* Funciones *)
@@ -94,11 +111,11 @@ let list_of_lazy_pred_list (LazyPredList(off, pl)) = List.map (fun p ->
  * (var --> expr), and composing them to generate a Most General
  * Unifier. 
  * *)
-let unify ?(bnd=Subst.identity) lp1 lp2 =
+let unify ?(bnd=SubstId.identity) lp1 lp2 =
     let rec unify' bnd e1 e2 =
         (* We replace variables with the values they already have *)
-        let e1' = bind_if_possible (Subst.find bnd) e1 in
-        let e2' = bind_if_possible (Subst.find bnd) e2 in
+        let e1' = bind_if_possible (SubstId.find bnd) e1 in
+        let e2' = bind_if_possible (SubstId.find bnd) e2 in
             match e1', e2' with
                 Var i, (Term _ as e)
               | (Term _ as e), Var i        -> Some (add_binding bnd i
@@ -138,7 +155,7 @@ type partial_proof = Partial of (var_count_proof * lazy_pred_list)
 
 let (>>=) = LazyList.(>>=)
 
-let busca_reglas db var_count ?(bnd=Subst.identity) lp =
+let busca_reglas db var_count ?(bnd=SubstId.identity) lp =
     (* TODO: Make more efficient... maybe filter by name and arity *)
     let it_reglas = LazyList.from_list db in
     LazyList.option_map (fun
@@ -157,11 +174,11 @@ let busca_reglas db var_count ?(bnd=Subst.identity) lp =
         it_reglas
 
 (* Removes unnecessary bindings *)
-let clean_bindings span bnd = Subst.filter (fun i -> (i <= span)) bnd
+let clean_bindings span bnd = SubstId.filter (fun i -> (i <= span)) bnd
 let clean_counted span (Counted (vc, bnd)) = (Counted (vc, clean_bindings span
 bnd))
 
-let rec prove db ?(cb=Counted (0, Subst.identity)) lp =
+let rec prove db ?(cb=Counted (0, SubstId.identity)) lp =
     (* Allocate space for variables in predicate *)
     let Counted(var_count, bnd) = cb in
     let pred_span = lazy_pred_span lp in
@@ -172,7 +189,7 @@ let rec prove db ?(cb=Counted (0, Subst.identity)) lp =
             LazyList.map (clean_counted pred_span)
                 (prove_all db ~cb:cb lpl))                             
 
-and prove_all db ?(cb=Counted (0, Subst.identity)) lpl = 
+and prove_all db ?(cb=Counted (0, SubstId.identity)) lpl = 
     (* Fold-left over the conditions *)
     let rec prove_all' cb = function
             []  ->  LazyList.single cb
@@ -207,7 +224,7 @@ let expression_from_user ?(tbls=(ref IntMap.empty, ref
                                table := IntMap.add !var_count var !table;
                                Var !var_count)
     in
-    let new_expr = sure_interpolate (function 
+    let new_expr = EI.sure_interpolate (function 
                       Anonymous -> allocate Anonymous
                     | VarName str as uvar -> try StringMap.find str !rev_table with
                         Not_found -> let v = allocate uvar in
@@ -249,17 +266,29 @@ let rec plist = function
 
 let (<<-) csq cnd = {csq = csq; cnd = cnd}
 let (|-) = pcons
-let rdb_belongs = [upred "pertenece" [Var 1; (Var 1 |- Var 2)] <<- [];
+let rdb_belongs = [upred "member" [Var 1; (Var 1 |- Var 2)] <<- [];
 
-                   upred "pertenece" [Var 1; (Var 2 |- Var 3)] <<- 
-                       [upred "pertenece" [Var 1; Var 3]]]
+                   upred "member" [Var 1; (Var 2 |- Var 3)] <<- 
+                       [upred "member" [Var 1; Var 3]]]
 
+let rdb_path    = [upred "arrow" [lit "A";lit "B"] <<- [];
+                   upred "arrow" [lit "B";lit "C"] <<- [];
+                   upred "arrow" [lit "B";lit "D"] <<- [];
+                   upred "arrow" [lit "C";lit "E"] <<- [];
+                   upred "arrow" [lit "D";lit "E"] <<- [];
+                   upred "arrow" [lit "E";lit "F"] <<- [];
 
+                   upred "path" [Var 1; Var 2; plist [Var 1;Var 2]] <<- 
+                       [upred "arrow" [Var 1; Var 2]];
 
-let pred_horizontal = pred "recta" [pred "punto" [Var 1;Var 2];
-                                    pred "punto" [Var 3;Var 2]]
+                   upred "path" [Var 1; Var 2; (Var 1) |- (Var 3)] <<-
+                       [upred "arrow" [Var 1; Var 4]; 
+                       upred "path" [Var 4; Var 2; Var 3]]]
 
-let pred_vertical   = pred "recta" [pred "punto" [Var 1;Var 2];
-                                    pred "punto" [Var 1;Var 3]]
+let pred_horizontal = pred "line" [pred "point" [Var 1;Var 2];
+                                    pred "point" [Var 3;Var 2]]
+
+let pred_vertical   = pred "line" [pred "point" [Var 1;Var 2];
+                                    pred "point" [Var 1;Var 3]]
 
 

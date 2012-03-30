@@ -1,15 +1,3 @@
-module Subst :
-  sig
-    type ('a, 'b) t = ('a * 'b) list
-    type ('a, 'b) fmap = ('a -> 'b option) -> 'b -> 'b
-    val identity : ('a, 'b) t
-    val compose : ('a, 'b) fmap -> ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
-    val apply : ('a, 'b) fmap -> ('a, 'b) t -> 'b -> 'b
-    val find : ('a, 'b) t -> 'a -> 'b option
-    val make : 'a -> 'b -> ('a, 'b) t
-    val add : ('a, 'b) fmap -> ('a, 'b) t -> 'a -> 'b -> ('a, 'b) t
-    val filter : ('a -> bool) -> ('a, 'b) t -> ('a, 'b) t
-  end
 type variable_id = int
 type special_pred = Is | Cut | BinaryNum of (int -> int -> bool)
 type pred_name =
@@ -20,31 +8,45 @@ type pred_name =
   | Special of special_pred
 type 'a gen_predicate = { name : pred_name; args : 'a gen_expression list; }
 and 'a gen_expression = Term of 'a gen_predicate | Var of 'a
-type 'a gen_bindings = ('a, 'a gen_expression) Subst.t
 type predicate = variable_id gen_predicate
 type expression = variable_id gen_expression
-type bindings = variable_id gen_bindings
 val mkpred : pred_name -> 'a gen_expression list -> 'a gen_predicate
 val arity : 'a gen_predicate -> int
+module ExpressionInterpolable :
+  sig
+    type 'a t = 'a gen_expression
+    val sure_interpolate : ('a -> 'b t) -> 'a t -> 'b t
+    val interpolate : ('a -> 'a t option) -> 'a t -> 'a t
+  end
+module SubstId :
+  sig
+    type key = variable_id
+    type value = variable_id ExpressionInterpolable.t
+    type t = (variable_id * variable_id ExpressionInterpolable.t) list
+    val identity : t
+    val singleton : key -> value -> t
+    val compose : t -> t -> t
+    val apply : t -> value -> value
+    val find : t -> key -> value option
+    val add : t -> key -> value -> t
+    val filter : (key -> bool) -> t -> t
+  end
+module EI :
+  sig
+    type 'a t = 'a gen_expression
+    val sure_interpolate : ('a -> 'b t) -> 'a t -> 'b t
+    val interpolate : ('a -> 'a t option) -> 'a t -> 'a t
+  end
+type bindings = SubstId.t
 val variable_span : int gen_expression -> int
 val variable_span_all : int gen_expression list -> int
 type rule = { csq : predicate; cnd : predicate list; }
 type rule_base = { user : rule list; }
 val bind_if_possible :
   ('a -> 'a gen_expression option) -> 'a gen_expression -> 'a gen_expression
-val sure_interpolate :
-  ('a -> 'b gen_expression) -> 'a gen_expression -> 'b gen_expression
-val interpolate :
-  ('a -> 'a gen_expression option) -> 'a gen_expression -> 'a gen_expression
-val add_binding :
-  (variable_id, variable_id gen_expression) Subst.t ->
-  variable_id ->
-  variable_id gen_expression ->
-  (variable_id, variable_id gen_expression) Subst.t
-val apply_bindings :
-  (variable_id, variable_id gen_expression) Subst.t ->
-  variable_id gen_expression -> variable_id gen_expression
-val apply_offset : int -> int gen_expression -> int gen_expression
+val add_binding : SubstId.t -> SubstId.key -> SubstId.value -> SubstId.t
+val apply_bindings : SubstId.t -> SubstId.value -> SubstId.value
+val apply_offset : int -> int EI.t -> int EI.t
 module O :
   sig
     type 'a t = 'a option
@@ -65,24 +67,18 @@ module GO :
 type lazy_pred = LazyPred of (int * predicate)
 type lazy_pred_list = LazyPredList of (int * predicate list)
 val lazy_of_pred : predicate -> lazy_pred
-val expr_of_lazy : lazy_pred -> variable_id gen_expression
+val expr_of_lazy : lazy_pred -> variable_id EI.t
 val lazy_pred_span : lazy_pred -> int
 val lazy_pred_list_span : lazy_pred_list -> int
 val list_of_lazy_pred_list : lazy_pred_list -> lazy_pred list
-val unify :
-  ?bnd:(variable_id, variable_id gen_expression) Subst.t ->
-  lazy_pred ->
-  lazy_pred -> (variable_id, variable_id gen_expression) Subst.t O.t
+val unify : ?bnd:SubstId.t -> lazy_pred -> lazy_pred -> SubstId.t O.t
 type var_count_proof = Counted of (int * bindings)
 type partial_proof = Partial of (var_count_proof * lazy_pred_list)
 val ( >>= ) : 'a LazyList.t -> ('a -> 'b LazyList.t) -> 'b LazyList.t
 val busca_reglas :
-  rule list ->
-  int ->
-  ?bnd:(variable_id, variable_id gen_expression) Subst.t ->
-  lazy_pred -> partial_proof LazyList.t
-val clean_bindings : 'a -> ('a, 'b) Subst.t -> ('a, 'b) Subst.t
-val clean_counted : variable_id -> var_count_proof -> var_count_proof
+  rule list -> int -> ?bnd:SubstId.t -> lazy_pred -> partial_proof LazyList.t
+val clean_bindings : SubstId.key -> SubstId.t -> SubstId.t
+val clean_counted : SubstId.key -> var_count_proof -> var_count_proof
 val prove :
   rule list -> ?cb:var_count_proof -> lazy_pred -> var_count_proof LazyList.t
 val prove_all :
@@ -152,10 +148,8 @@ module StringMap :
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
 val expression_from_user :
-  ?tbls:u_variable_id IntMap.t ref *
-        IntMap.key gen_expression StringMap.t ref ->
-  u_variable_id gen_expression ->
-  IntMap.key gen_expression * u_variable_id IntMap.t
+  ?tbls:u_variable_id IntMap.t ref * IntMap.key EI.t StringMap.t ref ->
+  u_variable_id EI.t -> IntMap.key EI.t * u_variable_id IntMap.t
 val pred_wrapper :
   ('a gen_expression -> 'b gen_expression) ->
   'a gen_predicate -> 'b gen_predicate
@@ -163,8 +157,7 @@ val pred_wrapper2 :
   ('a gen_expression -> 'b gen_expression * 'c) ->
   'a gen_predicate -> 'b gen_predicate * 'c
 val predicate_from_user :
-  ?tbls:u_variable_id IntMap.t ref *
-        IntMap.key gen_expression StringMap.t ref ->
+  ?tbls:u_variable_id IntMap.t ref * IntMap.key EI.t StringMap.t ref ->
   u_variable_id gen_predicate ->
   IntMap.key gen_predicate * u_variable_id IntMap.t
 val upred : string -> 'a gen_expression list -> 'a gen_predicate
@@ -177,5 +170,6 @@ val plist : 'a gen_expression list -> 'a gen_expression
 val ( <<- ) : predicate -> predicate list -> rule
 val ( |- ) : 'a gen_expression -> 'a gen_expression -> 'a gen_expression
 val rdb_belongs : rule list
+val rdb_path : rule list
 val pred_horizontal : int gen_expression
 val pred_vertical : int gen_expression
